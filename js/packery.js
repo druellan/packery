@@ -385,7 +385,10 @@ Packery.prototype.itemDragMove = function( elem, x, y ) {
 
   this.clearDragTimeout();
 
-  this.dragTimeout = setTimeout( delayed, 40 );
+  if ( !this.itemOverlapLocked( elem ) )
+  {
+    this.dragTimeout = setTimeout( delayed, 40 );
+  }
 };
 
 Packery.prototype.clearDragTimeout = function() {
@@ -419,8 +422,16 @@ Packery.prototype.itemDragEnd = function( elem ) {
   var onLayoutComplete = this._getDragEndLayoutComplete( elem, item );
 
   if ( item.needsPositioning ) {
+
     item.on( 'layout', onLayoutComplete );
-    item.moveTo( item.placeRect.x, item.placeRect.y );
+
+    if( this.itemOverlapLocked( elem ) ) {
+        // The item overlaps, so simulate a drag of the item back to its original position.
+        item.dragMove( item.rect.x, item.rect.y );
+        item.moveTo( item.rect.x, item.rect.y );
+    } else {
+        item.moveTo( item.placeRect.x, item.placeRect.y );
+    }
   } else if ( item ) {
     // item didn't need placement
     item.copyPlaceRectPosition();
@@ -429,6 +440,37 @@ Packery.prototype.itemDragEnd = function( elem ) {
   this.clearDragTimeout();
   this.on( 'layoutComplete', onLayoutComplete );
   this.layout();
+
+};
+
+/**
+ * Detect if an item is dragged over a locked item
+ * @param {Element} elem
+ */
+Packery.prototype.itemOverlapLocked = function( elem ) {
+
+    var item = this.getItem( elem );
+    var overlapLocked = false;
+    var i;
+
+    //console.debug(this.locks, "PKRY locks --------------");
+
+    for(i = 0; i < this.locks.length; i++) {
+      if(this.locks[i] == item.element) {
+          // The currently moving item is stamped as well, so just ignore that one.
+          continue;
+      }
+      var locked = this.getItem(this.locks[i]);
+      if(locked &&
+         ((locked.rect.x <= item.placeRect.x) && (item.placeRect.x < (locked.rect.x + locked.rect.width))) &&
+         ((locked.rect.y <= item.placeRect.y) && (item.placeRect.y < (locked.rect.y + locked.rect.height)))) {
+          overlapLocked = true;
+          //console.debug("PKRY Over LOCKED ---------------------");
+          break;
+      }
+    }
+
+    return overlapLocked;
 
 };
 

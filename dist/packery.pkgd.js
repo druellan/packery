@@ -633,7 +633,7 @@ if ( typeof define === 'function' && define.amd ) {
  */
 
 ;(function () {
-    
+    'use strict';
 
     /**
      * Class for managing events.
@@ -1190,7 +1190,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 ( function( ElemProto ) {
 
-  
+  'use strict';
 
   var matchesMethod = ( function() {
     // check for the standard method name first
@@ -1296,7 +1296,7 @@ if ( typeof define === 'function' && define.amd ) {
 
 ( function( window, factory ) {
   /*global define: false, module: false, require: false */
-  
+  'use strict';
   // universal module definition
 
   if ( typeof define == 'function' && define.amd ) {
@@ -1563,7 +1563,7 @@ return utils;
  */
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
   if ( typeof define === 'function' && define.amd ) {
     // AMD
@@ -1599,7 +1599,7 @@ return utils;
   }
 
 }( window, function factory( window, EventEmitter, getSize, getStyleProperty, utils ) {
-
+'use strict';
 
 // ----- helpers ----- //
 
@@ -2130,7 +2130,7 @@ return Item;
  */
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
 
   if ( typeof define == 'function' && define.amd ) {
@@ -2261,10 +2261,8 @@ Outlayer.prototype.option = function( opts ) {
 
 Outlayer.prototype._create = function() {
   // get items from children
-  this.reloadItems();
-  // elements that affect layout, but are not laid out
-  this.stamps = [];
-  this.stamp( this.options.stamp );
+  this.reloadContent();
+
   // set container style
   utils.extend( this.element.style, this.options.containerStyle );
 
@@ -2280,6 +2278,18 @@ Outlayer.prototype.reloadItems = function() {
   this.items = this._itemize( this.element.children );
 };
 
+// goes through all children again and gets bricks in proper order
+// // also, detect new locked and stamped items
+Outlayer.prototype.reloadContent = function() {
+  // collection of item elements
+  this.reloadItems();
+  // elements that affect layout, but are not laid out
+  this.stamps = [];
+  this.stamp( this.options.stamp );
+  // elements that affect layout, are laid out, but do not react at dragging events
+  this.locks = [];
+  this.lock( this.options.lock );
+};
 
 /**
  * turn elements into Outlayer.Items to be used in layout
@@ -2539,7 +2549,7 @@ Outlayer.prototype._setContainerMeasure = function( measure, isWidth ) {
 Outlayer.prototype._emitCompleteOnItems = function( eventName, items ) {
   var _this = this;
   function onComplete() {
-    _this.emitEvent( eventName + 'Complete', [ items ] );
+    _this.dispatchEvent( eventName + 'Complete', null, [ items ] );
   }
 
   var count = items.length;
@@ -2560,6 +2570,32 @@ Outlayer.prototype._emitCompleteOnItems = function( eventName, items ) {
   for ( var i=0, len = items.length; i < len; i++ ) {
     var item = items[i];
     item.once( eventName, tick );
+  }
+};
+
+/**
+ * emits events via eventEmitter and jQuery events
+ * @param {String} type - name of event
+ * @param {Event} event - original event
+ * @param {Array} args - extra arguments
+ */
+Outlayer.prototype.dispatchEvent = function( type, event, args ) {
+  // add original event to arguments
+  var emitArgs = event ? [ event ].concat( args ) : args;
+  this.emitEvent( type, emitArgs );
+
+  if ( jQuery ) {
+    // set this.$element
+    this.$element = this.$element || jQuery( this.element );
+    if ( event ) {
+      // create jQuery event
+      var $event = jQuery.Event( event );
+      $event.type = type;
+      this.$element.trigger( $event, args );
+    } else {
+      // just trigger with type if no event available
+      this.$element.trigger( type, args );
+    }
   }
 };
 
@@ -2624,6 +2660,18 @@ Outlayer.prototype.unstamp = function( elems ) {
     this.unignore( elem );
   }
 
+};
+
+/**
+* adds elements to locks
+* @param {NodeList, Array, Element, or String} elems
+*/
+Outlayer.prototype.lock = function( elems ) {
+  elems = this._find( elems );
+  if ( !elems ) {
+    return;
+  }
+  this.locks = this.locks.concat( elems );
 };
 
 /**
@@ -3030,7 +3078,7 @@ return Outlayer;
  */
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
   if ( typeof define == 'function' && define.amd ) {
     // AMD
@@ -3189,7 +3237,7 @@ return Rect;
  */
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
   if ( typeof define == 'function' && define.amd ) {
     // AMD
@@ -3354,7 +3402,7 @@ return Packer;
 **/
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
 
   if ( typeof define == 'function' && define.amd ) {
@@ -3543,17 +3591,17 @@ return Item;
  */
 
 ( function( window, factory ) {
-  
+  'use strict';
   // universal module definition
   if ( typeof define == 'function' && define.amd ) {
     // AMD
-    define( [
+    define( 'packery/js/packery',[
         'classie/classie',
         'get-size/get-size',
         'outlayer/outlayer',
-        'packery/js/rect',
-        'packery/js/packer',
-        'packery/js/item'
+        './rect',
+        './packer',
+        './item'
       ],
       factory );
   } else if ( typeof exports == 'object' ) {
@@ -3918,7 +3966,10 @@ Packery.prototype.itemDragMove = function( elem, x, y ) {
 
   this.clearDragTimeout();
 
-  this.dragTimeout = setTimeout( delayed, 40 );
+  if ( !this.itemOverlapLocked( elem ) )
+  {
+    this.dragTimeout = setTimeout( delayed, 40 );
+  }
 };
 
 Packery.prototype.clearDragTimeout = function() {
@@ -3952,8 +4003,16 @@ Packery.prototype.itemDragEnd = function( elem ) {
   var onLayoutComplete = this._getDragEndLayoutComplete( elem, item );
 
   if ( item.needsPositioning ) {
+
     item.on( 'layout', onLayoutComplete );
-    item.moveTo( item.placeRect.x, item.placeRect.y );
+
+    if( this.itemOverlapLocked( elem ) ) {
+        // The item overlaps, so simulate a drag of the item back to its original position.
+        item.dragMove( item.rect.x, item.rect.y );
+        item.moveTo( item.rect.x, item.rect.y );
+    } else {
+        item.moveTo( item.placeRect.x, item.placeRect.y );
+    }
   } else if ( item ) {
     // item didn't need placement
     item.copyPlaceRectPosition();
@@ -3962,6 +4021,37 @@ Packery.prototype.itemDragEnd = function( elem ) {
   this.clearDragTimeout();
   this.on( 'layoutComplete', onLayoutComplete );
   this.layout();
+
+};
+
+/**
+ * Detect if an item is dragged over a locked item
+ * @param {Element} elem
+ */
+Packery.prototype.itemOverlapLocked = function( elem ) {
+
+    var item = this.getItem( elem );
+    var overlapLocked = false;
+    var i;
+
+    //console.debug(this.locks, "PKRY locks --------------");
+
+    for(i = 0; i < this.locks.length; i++) {
+      if(this.locks[i] == item.element) {
+          // The currently moving item is stamped as well, so just ignore that one.
+          continue;
+      }
+      var locked = this.getItem(this.locks[i]);
+      if(locked &&
+         ((locked.rect.x <= item.placeRect.x) && (item.placeRect.x < (locked.rect.x + locked.rect.width))) &&
+         ((locked.rect.y <= item.placeRect.y) && (item.placeRect.y < (locked.rect.y + locked.rect.height)))) {
+          overlapLocked = true;
+          //console.debug("PKRY Over LOCKED ---------------------");
+          break;
+      }
+    }
+
+    return overlapLocked;
 
 };
 
