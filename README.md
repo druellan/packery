@@ -13,6 +13,8 @@ On this implementation, locked elements are not affected by user interaction, an
 "lock": ".locked"
 ```
 
+![](https://raw.githubusercontent.com/druellan/packery/master/demo.gif)
+
 This implementation was inspired by https://github.com/metafizzy/packery/pull/203 that extends the `stamp` property to achieve a similar effect.
 
 ### Special Dependencies
